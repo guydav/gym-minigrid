@@ -108,6 +108,22 @@ def point_in_triangle(a, b, c):
 
     return fn
 
+def point_in_array(arr):
+    """
+    Return a function that checks if a point , projected to array coordinates,
+    is true (value of 1) in the array
+    """
+
+    def fn(x, y):
+        if int(np.floor(y * arr.shape[0])) == arr.shape[0]:
+            print('y', y, arr.shape[0], np.floor(y * arr.shape[0]), int(np.floor(y * arr.shape[0])))
+        if int(np.floor(x * arr.shape[1])) == arr.shape[1]:
+            print('x', x, arr.shape[1], np.floor(x * arr.shape[1]), int(np.floor(x * arr.shape[1])))
+
+        return arr[int(np.floor(y * arr.shape[0])), int(np.floor(x * arr.shape[1]))] == 1
+
+    return fn
+
 def highlight_img(img, color=(255, 255, 255), alpha=0.30):
     """
     Add highlighting to an image

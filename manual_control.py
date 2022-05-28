@@ -96,10 +96,18 @@ parser.add_argument(
     help="draw the agent sees (partially observable view)",
     action='store_true'
 )
+parser.add_argument(
+    '--env-kwargs',
+    action='append',
+    default=[],
+    help="Optional kwargs for the environment split with '='",
+)
+
 
 args = parser.parse_args()
+args.env_kwargs = dict(arg.split('=') for arg in args.env_kwargs)
 
-env = gym.make(args.env)
+env = gym.make(args.env, **args.env_kwargs)
 
 if args.agent_view:
     env = RGBImgPartialObsWrapper(env)

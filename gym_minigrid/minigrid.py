@@ -6,6 +6,8 @@ import numpy as np
 from gym import error, spaces, utils
 from gym.utils import seeding
 from .rendering import *
+import pickle
+from os import path
 
 # Size in pixels of a tile in the full-scale human view
 TILE_PIXELS = 32
@@ -47,6 +49,18 @@ OBJECT_TO_IDX = {
     'goal'          : 8,
     'lava'          : 9,
     'agent'         : 10,
+    '0'             : 100,
+    '1'             : 101,
+    '2'             : 102,
+    '3'             : 103,
+    '4'             : 104,
+    '5'             : 105,
+    '6'             : 106,
+    '7'             : 107,
+    '8'             : 108,
+    '9'             : 109,
+    '+'             : 110,
+    '-'             : 111,
 }
 
 IDX_TO_OBJECT = dict(zip(OBJECT_TO_IDX.values(), OBJECT_TO_IDX.keys()))
@@ -69,6 +83,10 @@ DIR_TO_VEC = [
     # Up (negative Y)
     np.array((0, -1)),
 ]
+
+TEXT_TO_ARRAY_PATH = 'text_to_array.pkl'
+with open(path.join(path.dirname(__file__), TEXT_TO_ARRAY_PATH), 'rb') as f:
+    TEXT_TO_ARRAY = pickle.load(f)
 
 class WorldObj:
     """
@@ -142,6 +160,8 @@ class WorldObj:
             v = Goal()
         elif obj_type == 'lava':
             v = Lava()
+        elif obj_type in TEXT_TO_ARRAY:
+            v = Text(obj_type, color)
         else:
             assert False, "unknown object type in decode '%s'" % obj_type
 
@@ -325,6 +345,21 @@ class Box(WorldObj):
         # Replace the box by its contents
         env.grid.set(*pos, self.contains)
         return True
+
+class Text(WorldObj):
+    def __init__(self, text, color='blue', can_pickup=True):
+        super(Text, self).__init__(text, color)
+        self.text = text
+        self._can_pickup = can_pickup
+        if self.text not in TEXT_TO_ARRAY:
+            raise ValueError(f'Text {self.text} not in TEXT_TO_ARRAY: {TEXT_TO_ARRAY.keys()}')
+
+    def can_pickup(self):
+        return self._can_pickup
+
+    def render(self, img):
+        fill_coords(img, point_in_array(TEXT_TO_ARRAY[self.text]), COLORS[self.color])
+
 
 class Grid:
     """
