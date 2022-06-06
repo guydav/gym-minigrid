@@ -5,6 +5,7 @@ from enum import IntEnum
 import numpy as np
 from gym import error, spaces, utils
 from gym.utils import seeding
+from sqlalchemy import TEXT
 from .rendering import *
 import pickle
 from os import path
@@ -49,18 +50,7 @@ OBJECT_TO_IDX = {
     'goal'          : 8,
     'lava'          : 9,
     'agent'         : 10,
-    '0'             : 100,
-    '1'             : 101,
-    '2'             : 102,
-    '3'             : 103,
-    '4'             : 104,
-    '5'             : 105,
-    '6'             : 106,
-    '7'             : 107,
-    '8'             : 108,
-    '9'             : 109,
-    '+'             : 110,
-    '-'             : 111,
+    'text'          : 11
 }
 
 IDX_TO_OBJECT = dict(zip(OBJECT_TO_IDX.values(), OBJECT_TO_IDX.keys()))
@@ -87,6 +77,10 @@ DIR_TO_VEC = [
 TEXT_TO_ARRAY_PATH = 'text_to_array.pkl'
 with open(path.join(path.dirname(__file__), TEXT_TO_ARRAY_PATH), 'rb') as f:
     TEXT_TO_ARRAY = pickle.load(f)
+
+TEXT_KEYS = list(TEXT_TO_ARRAY.keys())
+TEXT_TO_ARRAY_INDICES = {text: idx for idx, text in enumerate(TEXT_KEYS)}
+
 
 class WorldObj:
     """
@@ -160,8 +154,8 @@ class WorldObj:
             v = Goal()
         elif obj_type == 'lava':
             v = Lava()
-        elif obj_type in TEXT_TO_ARRAY:
-            v = Text(obj_type, color)
+        elif obj_type == 'text':
+            v = Text(state, color)
         else:
             assert False, "unknown object type in decode '%s'" % obj_type
 
@@ -348,7 +342,10 @@ class Box(WorldObj):
 
 class Text(WorldObj):
     def __init__(self, text, color='blue', can_pickup=True):
-        super(Text, self).__init__(text, color)
+        super(Text, self).__init__('text', color)
+        if isinstance(text, int) and 0 <= text < len(TEXT_KEYS):
+            text = TEXT_KEYS[text]
+
         self.text = text
         self._can_pickup = can_pickup
         if self.text not in TEXT_TO_ARRAY:
@@ -359,6 +356,10 @@ class Text(WorldObj):
 
     def render(self, img):
         fill_coords(img, point_in_array(TEXT_TO_ARRAY[self.text]), COLORS[self.color])
+
+    def encode(self):
+        # Use the third coordinate to encode which type of Text object this is
+        return (OBJECT_TO_IDX[self.type], COLOR_TO_IDX[self.color], TEXT_TO_ARRAY_INDICES[self.text])
 
 
 class Grid:
@@ -840,6 +841,10 @@ class MiniGridEnv(gym.Env):
                     else:
                         str += 'D' + c.color[0].upper()
                     continue
+
+                elif c.type == 'text':
+                    str += c.text.upper() + c.color[0].upper()
+                    continue 
 
                 str += OBJECT_TO_STR[c.type] + c.color[0].upper()
 

@@ -1,5 +1,4 @@
 from collections import defaultdict
-from email.policy import default
 import typing
 
 from gym_minigrid.minigrid import *
@@ -21,7 +20,9 @@ class NumberTasksGridEnv(MiniGridEnv):
     def __init__(self, size: int = 9, shuffle_task_locations: bool = True, visualize_task: bool = False,
                 task: typing.Optional[NumberTaskType] = None, 
                 color_indices: typing.Sequence[int] = DEFAULT_COLOR_INDICES, 
-                seed: typing.Optional[int] = None
+                seed: typing.Optional[int] = None,
+                positive_reward: typing.Optional[int] = None,
+                negative_reward: int = 0,
         ):
 
         self.size = size
@@ -49,13 +50,15 @@ class NumberTasksGridEnv(MiniGridEnv):
             task = NumberTaskType(task)
 
         self.task = task
+        self.positive_reward = positive_reward
+        self.negative_reward = negative_reward
 
     def _gen_grid(self, width: int, height: int):
         self.grid = Grid(width, height)
         self.grid.wall_rect(0, 0, width, height)
 
-        self.digit = self.np_random.integers(0, 10)
-        self.correct_color_index = self.np_random.integers(0, 2)
+        self.digit = self.np_random.randint(0, 10)
+        self.correct_color_index = self.np_random.randint(0, 2)
         stimulus = Text(str(self.digit), 
             color=IDX_TO_COLOR[self.color_indices[self.correct_color_index]], 
             can_pickup=False)
@@ -123,20 +126,34 @@ class NumberTasksGridEnv(MiniGridEnv):
 
             done = True
 
+        if reward == 1:
+            reward = self._reward() if self.positive_reward is None else self.positive_reward
+        elif reward == -1:
+            reward = self.negative_reward
+
         return obs, reward, done, info
 
 
 
 class NumberTasksTMaze(MiniGridEnv):
-    def __init__(self, size: int = 5, visualize_task: bool = False, 
+    def __init__(self, size: typing.Union[int, typing.Tuple[int, int]] = 5, 
+                 visualize_task: bool = False, 
                  task: typing.Optional[NumberTaskType] = None, switch_tasks: bool = False,
                  show_all_tasks: bool = False,  shuffle_task_locations: bool = True,
-                 color_indices: typing.Sequence[int] = DEFAULT_COLOR_INDICES, seed: typing.Optional[int] = None):
+                 color_indices: typing.Sequence[int] = DEFAULT_COLOR_INDICES, 
+                 seed: typing.Optional[int] = None,
+                 positive_reward: typing.Optional[int] = None,
+                 negative_reward: int = 0,):
 
-        self.size = size
-        self.grid_mid = (self.size + 1) // 2
+        if isinstance(size, int):
+            width = height = size
+        else:
+            width, height = size
+        
+        self.w_mid = (width + 1) // 2
+        self.h_mid = (height + 1) // 2
 
-        self.goal_locations = [(1, 1), (self.size, 1)]
+        self.goal_locations = [(1, 1), (width, 1)]
         self.task_locations = defaultdict(list)
         self.locations_to_task_markers = {}
         self.digit = None
@@ -156,42 +173,48 @@ class NumberTasksTMaze(MiniGridEnv):
             task = NumberTaskType(task)
 
         self.task = task
+        self.positive_reward = positive_reward
+        self.negative_reward = negative_reward
     
-        super().__init__(grid_size=size + 2, max_steps=4*size*size, see_through_walls=True, seed=seed)
+        super().__init__(width=width + 2, height=height + 2,
+            max_steps=4*(max(width, height) ** 2), 
+            see_through_walls=True, seed=seed, agent_view_size=min(width + 2, height + 2))
 
     def _gen_grid(self, width, height):
         self.grid = Grid(width, height)
         self.grid.wall_rect(0, 0, width, height)
-        for i in range(1, self.size + 2):
-            if i != self.grid_mid:
-                self.grid.vert_wall(i, 2, self.size - 1)
 
-        self.digit = self.np_random.integers(0, 10)
-        self.correct_color_index = self.np_random.integers(0, 2)
+        if height - 1 > 2:
+            for i in range(1, width - 1):
+                if i != self.w_mid:
+                    self.grid.vert_wall(i, 2, height - 3)
+
+        self.digit = self.np_random.randint(0, 10)
+        self.correct_color_index = self.np_random.randint(0, 2)
         stimulus = Text(str(self.digit), 
             color=IDX_TO_COLOR[self.color_indices[self.correct_color_index]], 
             can_pickup=False)
-        self.put_obj(stimulus, self.grid_mid, 0)
-        self.agent_pos = (self.grid_mid, self.size)
+        self.put_obj(stimulus, self.w_mid, 0)
+        self.agent_pos = (self.w_mid, height - 2)
         self.agent_dir = 3
 
         for goal_loc in self.goal_locations:
             self.put_obj(Goal(), *goal_loc)
 
         # place tasks
-        self._place_tasks()
+        self._place_tasks(width, height)
 
         # TODO: do something with the visualize_task flag
 
-    def _place_tasks(self):
+    def _place_tasks(self, width, height):
         if len(self.task_locations) == 0 or self.shuffle_task_locations:
             self.task_locations = defaultdict(list)
 
             if self.show_all_tasks:
                 all_locations = [
-                    ((0, 1), (self.size + 1, 1)),
-                    ((1, 0), (self.size, 0)),
-                    ((1, 2), (self.size, 2)),
+                    ((0, 1), (width - 1, 1)),
+                    ((1, 0), (width - 2, 0)),
+                    ((1, 2), (width - 2, 2)),
                 ]
                 all_locations_permutation = self.np_random.permutation(len(all_locations))
 
@@ -215,7 +238,7 @@ class NumberTasksTMaze(MiniGridEnv):
                         self.locations_to_task_markers[loc] = stimulus
                         self.put_obj(stimulus, *loc)
             else:
-                locations = [(0, 1), (self.size + 1, 1)]
+                locations = [(0, 1), (width - 1, 1)]
                 permutation = self.np_random.permutation(len(locations))
 
                 if self.task == NumberTaskType.color:
@@ -263,6 +286,11 @@ class NumberTasksTMaze(MiniGridEnv):
 
             done = True
 
+        if reward == 1:
+            reward = self._reward() if self.positive_reward is None else self.positive_reward
+        elif reward == -1:
+            reward = self.negative_reward
+
         return obs, reward, done, info
 
 
@@ -286,6 +314,18 @@ class NumberTasksTMaze5(NumberTasksTMaze):
             color_indices=color_indices, seed=seed)
 
 
+class NumberTasksNosePoke(NumberTasksTMaze):
+    def __init__(self, visualize_task: bool = False, switch_tasks: bool = False,
+                 show_all_tasks: bool = False, shuffle_task_locations: bool = False,
+                 task: typing.Optional[NumberTaskType] = None, 
+                 color_indices: typing.Sequence[int] = DEFAULT_COLOR_INDICES,
+                 seed: typing.Optional[int] = None):
+        super().__init__(size=(3, 1),
+            visualize_task=visualize_task, task=task, switch_tasks=switch_tasks,
+            show_all_tasks=show_all_tasks, shuffle_task_locations=shuffle_task_locations,
+            color_indices=color_indices, seed=seed)
+
+
 register(
     id='MiniGrid-NumberTaskGrid9x9-v0',
     entry_point='gym_minigrid.envs:NumberTaskGrid9x9'
@@ -295,3 +335,9 @@ register(
     id='MiniGrid-NumberTasksTMaze5-v0',
     entry_point='gym_minigrid.envs:NumberTasksTMaze5'
 )
+
+register(
+    id='MiniGrid-NumberTasksNosePoke-v0',
+    entry_point='gym_minigrid.envs:NumberTasksNosePoke'
+)
+
