@@ -45,6 +45,7 @@ class NumberTasksGridEnv(MiniGridEnv):
         self.visualize_task = visualize_task
 
         if task is None:
+            self.seed(seed)
             task = self.np_random.choice(list(NumberTaskType))
         elif isinstance(task, str):
             task = NumberTaskType(task)
@@ -168,6 +169,7 @@ class NumberTasksTMaze(MiniGridEnv):
         self.mission = 'Figure out which number task is active and perform it'
         
         if task is None:
+            self.seed(seed)
             task = self.np_random.choice(list(NumberTaskType))
         elif isinstance(task, str):
             task = NumberTaskType(task)
