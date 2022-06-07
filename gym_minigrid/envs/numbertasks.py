@@ -22,7 +22,7 @@ class NumberTasksGridEnv(MiniGridEnv):
                 color_indices: typing.Sequence[int] = DEFAULT_COLOR_INDICES, 
                 seed: typing.Optional[int] = None,
                 positive_reward: typing.Optional[int] = None,
-                negative_reward: int = 0,
+                negative_reward: int = 0, 
         ):
 
         self.size = size
@@ -143,8 +143,10 @@ class NumberTasksTMaze(MiniGridEnv):
                  show_all_tasks: bool = False,  shuffle_task_locations: bool = True,
                  color_indices: typing.Sequence[int] = DEFAULT_COLOR_INDICES, 
                  seed: typing.Optional[int] = None,
-                 positive_reward: typing.Optional[int] = None,
-                 negative_reward: int = 0,):
+                 positive_reward: typing.Optional[float] = None,
+                 negative_reward: float = 0,
+                 step_reward: float = 0,
+                 min_agent_view_size: int = 101,):
 
         if isinstance(size, int):
             width = height = size
@@ -177,10 +179,11 @@ class NumberTasksTMaze(MiniGridEnv):
         self.task = task
         self.positive_reward = positive_reward
         self.negative_reward = negative_reward
+        self.step_reward = step_reward
     
         super().__init__(width=width + 2, height=height + 2,
             max_steps=4*(max(width, height) ** 2), 
-            see_through_walls=True, seed=seed, agent_view_size=min(width + 2, height + 2))
+            see_through_walls=True, seed=seed, agent_view_size=min(width + 2, height + 2, min_agent_view_size))
 
     def _gen_grid(self, width, height):
         self.grid = Grid(width, height)
@@ -218,11 +221,17 @@ class NumberTasksTMaze(MiniGridEnv):
                     ((1, 0), (width - 2, 0)),
                     ((1, 2), (width - 2, 2)),
                 ]
-                all_locations_permutation = self.np_random.permutation(len(all_locations))
+                if self.shuffle_task_locations:
+                    all_locations_permutation = self.np_random.permutation(len(all_locations))
+                else:
+                    all_locations_permutation = np.arange(len(all_locations))
 
                 for task_index, task in enumerate(NumberTaskType):
                     locations = all_locations[all_locations_permutation[task_index]]
-                    permutation = self.np_random.permutation(len(locations))
+                    if self.shuffle_task_locations:
+                        permutation = self.np_random.permutation(len(locations))
+                    else:
+                        permutation = np.arange(len(locations))
 
                     if task == NumberTaskType.color:
                         stimuli = [Ball(color=IDX_TO_COLOR[self.color_indices[self.correct_color_index]]),
@@ -241,7 +250,10 @@ class NumberTasksTMaze(MiniGridEnv):
                         self.put_obj(stimulus, *loc)
             else:
                 locations = [(0, 1), (width - 1, 1)]
-                permutation = self.np_random.permutation(len(locations))
+                if self.shuffle_task_locations:
+                    permutation = self.np_random.permutation(len(locations))
+                else:
+                    permutation = np.arange(len(locations))
 
                 if self.task == NumberTaskType.color:
                     stimuli = [Ball(color=IDX_TO_COLOR[self.color_indices[self.correct_color_index]]),
@@ -292,16 +304,18 @@ class NumberTasksTMaze(MiniGridEnv):
             reward = self._reward() if self.positive_reward is None else self.positive_reward
         elif reward == -1:
             reward = self.negative_reward
+        else:
+            reward = self.step_reward
 
         return obs, reward, done, info
 
 
 
 class NumberTaskGrid9x9(NumberTasksGridEnv):
-    def __init__(self, task=None, color_indices=DEFAULT_COLOR_INDICES, seed=None):
+    def __init__(self, task=None, color_indices=DEFAULT_COLOR_INDICES, seed=None, **kwargs):
         super().__init__(size=9, shuffle_task_locations=True, 
             visualize_task=False, task=task, 
-            color_indices=color_indices, seed=seed)
+            color_indices=color_indices, seed=seed, **kwargs)
 
 
 class NumberTasksTMaze5(NumberTasksTMaze):
@@ -309,11 +323,11 @@ class NumberTasksTMaze5(NumberTasksTMaze):
                  show_all_tasks: bool = False, shuffle_task_locations: bool = False,
                  task: typing.Optional[NumberTaskType] = None, 
                  color_indices: typing.Sequence[int] = DEFAULT_COLOR_INDICES,
-                 seed: typing.Optional[int] = None):
+                 seed: typing.Optional[int] = None, **kwargs):
         super().__init__(size=5,
             visualize_task=visualize_task, task=task, switch_tasks=switch_tasks,
             show_all_tasks=show_all_tasks, shuffle_task_locations=shuffle_task_locations,
-            color_indices=color_indices, seed=seed)
+            color_indices=color_indices, seed=seed, **kwargs)
 
 
 class NumberTasksNosePoke(NumberTasksTMaze):
@@ -321,11 +335,11 @@ class NumberTasksNosePoke(NumberTasksTMaze):
                  show_all_tasks: bool = False, shuffle_task_locations: bool = False,
                  task: typing.Optional[NumberTaskType] = None, 
                  color_indices: typing.Sequence[int] = DEFAULT_COLOR_INDICES,
-                 seed: typing.Optional[int] = None):
+                 seed: typing.Optional[int] = None, **kwargs):
         super().__init__(size=(3, 1),
             visualize_task=visualize_task, task=task, switch_tasks=switch_tasks,
             show_all_tasks=show_all_tasks, shuffle_task_locations=shuffle_task_locations,
-            color_indices=color_indices, seed=seed)
+            color_indices=color_indices, seed=seed, **kwargs)
 
 
 register(
