@@ -156,7 +156,7 @@ class NumberTasksTMaze(MiniGridEnv):
         self.w_mid = (width + 1) // 2
         self.h_mid = (height + 1) // 2
 
-        self.goal_locations = [(1, 1), (width, 1)]
+        # self.goal_locations = [(1, 1), (width, 1)]
         self.task_locations = defaultdict(list)
         self.locations_to_task_markers = {}
         self.digit = None
@@ -180,10 +180,13 @@ class NumberTasksTMaze(MiniGridEnv):
         self.positive_reward = positive_reward
         self.negative_reward = negative_reward
         self.step_reward = step_reward
+        self.min_agent_view_size = int(min_agent_view_size)
     
         super().__init__(width=width + 2, height=height + 2,
             max_steps=4*(max(width, height) ** 2), 
-            see_through_walls=True, seed=seed, agent_view_size=min(width + 2, height + 2, min_agent_view_size))
+            see_through_walls=True, seed=seed, 
+            agent_view_size=max(min(width + 2, height + 2), self.min_agent_view_size)
+        )
 
     def _gen_grid(self, width, height):
         self.grid = Grid(width, height)
@@ -203,8 +206,8 @@ class NumberTasksTMaze(MiniGridEnv):
         self.agent_pos = (self.w_mid, height - 2)
         self.agent_dir = 3
 
-        for goal_loc in self.goal_locations:
-            self.put_obj(Goal(), *goal_loc)
+        # for goal_loc in self.goal_locations:
+        #     self.put_obj(Goal(), *goal_loc)
 
         # place tasks
         self._place_tasks(width, height)
@@ -276,24 +279,67 @@ class NumberTasksTMaze(MiniGridEnv):
                 self.put_obj(stimlus, *loc)
 
     
+    # def step(self, action: MiniGridEnv.Actions):
+    #     obs, reward, done, info = super().step(action)
+
+    #     agent_pos = tuple(self.agent_pos)
+    #     if agent_pos in self.goal_locations:
+    #         agent_pos_index = self.goal_locations.index(agent_pos)
+
+    #         if self.task == NumberTaskType.color:
+    #             task_stim = list(filter(lambda obj: isinstance(obj, Ball), self.task_locations[agent_pos_index]))[0]
+    #             reward = 1 if task_stim.color == IDX_TO_COLOR[self.color_indices[self.correct_color_index]] else -1
+
+    #         elif self.task == NumberTaskType.magnitude:
+    #             task_stim = list(filter(lambda obj: isinstance(obj, Text) and obj.text in ('+', '-'), self.task_locations[agent_pos_index]))[0]
+    #             reward = 1 if (task_stim.text == '+') == (self.digit >= 5) else -1
+                
+    #         elif self.task == NumberTaskType.parity:
+    #             task_stim = list(filter(lambda obj: isinstance(obj, Text) and obj.text in ('0', '1'), self.task_locations[agent_pos_index]))[0]
+    #             reward = 1 if (task_stim.text == '0') == (self.digit % 2 == 0) else -1
+
+    #         else:
+    #             raise ValueError(f'Unknown task: {self.task}')
+
+    #         done = True
+
+    #     if reward == 1:
+    #         reward = self._reward() if self.positive_reward is None else self.positive_reward
+    #     elif reward == -1:
+    #         reward = self.negative_reward
+    #     else:
+    #         reward = self.step_reward
+
+    #     return obs, reward, done, info
+
     def step(self, action: MiniGridEnv.Actions):
         obs, reward, done, info = super().step(action)
 
-        agent_pos = tuple(self.agent_pos)
-        if agent_pos in self.goal_locations:
-            agent_pos_index = self.goal_locations.index(agent_pos)
+        if action == self.actions.pickup:
+            print(f'Task: {self.task}')
+            task_stim = self.carrying
 
-            if self.task == NumberTaskType.color:
-                task_stim = list(filter(lambda obj: isinstance(obj, Ball), self.task_locations[agent_pos_index]))[0]
-                reward = 1 if task_stim.color == IDX_TO_COLOR[self.color_indices[self.correct_color_index]] else -1
+            if task_stim is None:
+                # TODO: is this 0 reward, or -1?
+                return obs, 0, done, info
+
+            elif self.task == NumberTaskType.color:
+                if isinstance(task_stim, Ball):
+                    reward = 1 if task_stim.color == IDX_TO_COLOR[self.color_indices[self.correct_color_index]]  else -1
+                else:
+                    reward = -1
 
             elif self.task == NumberTaskType.magnitude:
-                task_stim = list(filter(lambda obj: isinstance(obj, Text) and obj.text in ('+', '-'), self.task_locations[agent_pos_index]))[0]
-                reward = 1 if (task_stim.text == '+') == (self.digit >= 5) else -1
+                if isinstance(task_stim, Text) and task_stim.text in ('+', '-'):
+                    reward = 1 if (task_stim.text == '+') == (self.digit >= 5) else -1
+                else:
+                    reward = -1
                 
             elif self.task == NumberTaskType.parity:
-                task_stim = list(filter(lambda obj: isinstance(obj, Text) and obj.text in ('0', '1'), self.task_locations[agent_pos_index]))[0]
-                reward = 1 if (task_stim.text == '0') == (self.digit % 2 == 0) else -1
+                if isinstance(task_stim, Text) and task_stim.text in ('0', '1'):
+                    reward = 1 if (task_stim.text == '0') == (self.digit % 2 == 0) else -1
+                else:
+                    reward = -1
 
             else:
                 raise ValueError(f'Unknown task: {self.task}')
